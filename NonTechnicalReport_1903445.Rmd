@@ -1,0 +1,81 @@
+---
+title: "Beijing Air Quality: Non Technical Report"
+author: "Roshi Shrestha"
+date: "07 May 2020"
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    fig_caption: yes
+    number_sections: yes
+---
+
+```{r setup, include=FALSE}
+chooseCRANmirror(graphics=FALSE, ind=1)
+knitr::opts_chunk$set(echo = TRUE, error=TRUE)
+```
+# Introduction
+Air pollution has been a major concern harming human health and the environment worldwide. Like many urban areas around the globe, Beijing suffers from one of the worst air pollution in the world. China’s economic growth has been the main factor for poor air quality in many Chinese cities (Lui and Diamond, 2008). Almost 70% of the emissions are caused by vehicles on the road. Four most important pollutant for air pollution are sulphur dioxide (SO2), nitrogen dioxide (NO2), carbon monoxide (CO) and particulate matter (PM2.5 and PM10). Particulate matter, specially PM2.5 have been known to be carcinogenic (Hamra et al., 2014) and particularly harmful as it can penetrate the upper airways and deposit in lower respiratory tract (See and Balasubramanian, 2008). PM2.5 is also known as fine particles which are less than 2.5m in aerodynamic diameter (WHO, 2005). Due to its small size, PM2.5 can also linger around in the air for longer. Severity of air pollution can be measured by the concentration of PM2.5 in the air. In China, 16-27% of the PM2.5 pollution is caused by the industries (Karagulian et al., 2015). In this study I wanted to look at the effect of various meterological factors on air quality in Beijing in 2013 and study if it is possible to predict the air quality by looking at these factors. In reality, air quality is very much affected by these factors in combination with the time of the day, month or season. However, in this study, I will try to see if the predictors can be used for supervised learning to predict the air quality index accurately. 
+
+
+```{r echo=FALSE, eval=FALSE}
+getwd()
+df1<- read.csv ("Beijing2015.csv")
+str(df1)
+```
+
+```{r message = FALSE, warning = FALSE, echo=FALSE, eval=FALSE}
+library(data.table)
+setnames(df1, "PM_US.Post", "PM2.5")
+df1_filt<-df1[,c(1,2,3,4,5,6,10,11,12,13,14,16)]
+str(df1_filt)
+library(tidyverse)
+library(tidyr)
+df1_filt<-filter(df1_filt, year>2012)
+head(df1_filt)
+df1_filt$No<-NULL
+df1_NA<-na.omit(df1_filt)
+head(df1_NA)
+```
+```{r}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+```
+
+
+
+```{r}
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y))
+    txt <- format(c(r, 0.123456789), digits = digits)[1]
+    txt <- paste0(prefix, txt)
+    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+```
+```{r}
+
+pairs(df1_NA[1:10],lower.panel=panel.smooth,upper.panel=panel.cor)  # Iws variable is missing in this correlation. Please organise the data (bring before cbwd) and include that one in correlation
+
+bpm <- with(df1_NA, reorder(year, PM2.5, FUN = median))
+boxplot(log(PM2.5) ~ bpm, data = df1_NA)
+```
+```{r echo=FALSE, eval=TRUE, fig1 , fig.cap = "Fig.1. PM2.5 concentration in Beijing city over 3 years"}
+
+df1_NA$PM2.5 = log(df1_NA$PM2.5)
+head(df1_NA)
+df1_NA$year<-factor(df1_NA$year)
+df1_NA$month<-factor(df1_NA$month)
+df1_NA$season<-factor(df1_NA$season)
+
+df1_NA$year= factor(df1_NA$year,c("2013","2014","2015"))
+df1_NA$month = factor(df1_NA$month,c("1","2","3","4","5","6","7","8","9","10","11","12"))
+boxplot(df1_NA$PM2.5~df1_NA$year, xlab = "Years", ylab="PM2.5 concentrations(ug/m3)")
+        
+        
+        
+```
