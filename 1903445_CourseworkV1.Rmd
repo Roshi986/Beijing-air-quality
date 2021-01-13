@@ -1,0 +1,726 @@
+---
+title: "Beijing Air Quality 2013"
+author: "Roshi Shrestha"
+date: "07 May 2020"
+output:
+  html_document:
+    fig_caption: yes
+    number_sections: yes
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+chooseCRANmirror(graphics=FALSE, ind=1)
+knitr::opts_chunk$set(echo = TRUE, error=TRUE)
+```
+
+
+# Introduction
+Air pollution has been a major concern harming human health and the environment worldwide. Like many urban areas around the globe, Beijing suffers from one of the worst air pollution in the world. China’s economic growth has been the main factor for poor air quality in many Chinese cities (Lui and Diamond, 2008). Almost 70% of the emissions are caused by vehicles on the road. Four most important pollutant for air pollution are sulphur dioxide (SO2), nitrogen dioxide (NO2), carbon monoxide (CO) and particulate matter (PM2.5 and PM10). Particulate matter, specially PM2.5 have been known to be carcinogenic (Hamra et al., 2014) and particularly harmful as it can penetrate the upper airways and deposit in lower respiratory tract (See and Balasubramanian, 2008). PM2.5 is also known as fine particles which are less than 2.5m in aerodynamic diameter (WHO, 2005). Due to its small size, PM2.5 can also linger around in the air for longer. Severity of air pollution can be measured by the concentration of PM2.5 in the air. In China, 16-27% of the PM2.5 pollution is caused by the industries (Karagulian et al., 2015). In this study I wanted to look at the effect of various meterological factors on air quality in Beijing in 2013 and study if it is possible to predict the air quality by looking at these factors. In reality, air quality is very much affected by these factors in combination with the time of the day, month or season. However, in this study, I will try to see if the predictors can be used for supervised learning to predict the air quality index accurately. 
+
+
+
+```{r eval=FALSE}
+getwd()
+data<- read.csv ("Beijing2015.csv")
+```
+# Dataset information
+The dataset was acquired from UCI repository (http://archive.ics.uci.edu/ml/datasets/PM2.5+Data+of+Five+Chinese+Cities). 
+This dataset contains data from 2010 to 2015 in five different Chinese cities. For this study, only the data from Beijing will be used. The PM2.5 reading are also recorded from four different sources. The PM2.5 reading from these different sources have shown to be correlated (Liang et al., 2016). For the purpose of this study only the readings from US_Post will be used. All the attributes in the original dataset are:
+
+1.	NO: row number
+2.	year: year of data in this row
+3.	month: month of data in this row
+4.	day: day of data in this row
+5.	hour: hour of data in this row
+6.	season: season of data in this row
+7.	PM: PM2.5 concentration (g/m3)(hourly reading of the concentration)
+8.	DEWP: Dew Point (Celsius Degree)
+9.	TEMP: Temperature (Celsius Degree)
+10.	HUMI: Humidity (%)
+11.	PRES: Pressure (hPa)
+12.	cbwd: Combined wind direction
+13.	Iws: Cumulated wind speed (m/s)
+14.	precipitation: hourly precipitation (mm)
+15.	Iprec: Cumulated precipitation (mm)
+
+
+
+## Look at dataset
+```{r}
+summary(data)
+```
+
+```{r eval=TRUE}
+str(data)
+```
+
+```{r eval=TRUE}
+head(data)
+```
+## Data cleaning and preprocessing:
+
+The dataset contained data deom 2010-2015. However there were lots of data missing in 2010-2012. So got rid of 2010-2012 which had no data or lots of missing data. I used the filter function.
+```{r message = FALSE, warning = FALSE}
+library(tidyverse)
+library(tidyr)
+filt_data<-filter(data, year>2012)
+```
+
+Look at the dataset after filtering
+```{r eval=FALSE}
+dim(filt_data)
+str(filt_data)
+head(filt_data)
+summary(filt_data)
+class(filt_data)
+```
+Got rid of useless columns: in this case all other PM2.5 readings apart from US_Post was removed.
+````{r echo=FALSE, eval=FALSE}
+my_data <- filt_data [ , c (2,3,4,5,6,10,11,12,13,14,15,16,17,18)]
+str(my_data)
+summary(my_data)
+```
+The column name PM_US.Post was changed to PM2.5.
+```{r message = FALSE, warning = FALSE, eval=FALSE}
+library(data.table)
+setnames(my_data, "PM_US.Post", "PM2.5")
+```
+
+Now look for missing data
+```{r}
+summary(my_data)
+#there are still some missing values in the dataset.
+
+```
+
+```{r eval=TRUE}
+list_na <- colnames(my_data)[ apply(my_data, 2, anyNA) ]
+list_na # show the list of columns that contain NAs
+```
+
+Removed missing values.Since the dataset was big enough, I decided to get rid of the missing values instead of imputing.
+```{r eval=TRUE}
+my_datana <- na.omit (my_data)
+colSums(is.na(my_datana)) # no NAs left
+str(my_datana)
+# here I want to change columns 1 to 7 to numeric from int
+my_datana[1:7]<- lapply(my_datana[1:7], as.numeric)
+str(my_datana) # all are changed into numeric
+```
+
+
+looked at correlations between some of the numeric variables
+```{r}
+library(ggplot2)
+cor(my_datana[, c(5,7, 6,8,9,12,14)])
+library(corrplot)
+```
+
+```{r fig 1,  fig.cap = "Fig.1. Corrplot of the variables for the whole dataset"}
+corrplot(cor(my_datana[, c(5,7, 6,8,9,12,14)]))
+```
+
+
+After trying various data exploration on the whole dataset, I decided to just use the data for the Year 2013. 
+
+```{r eval=FALSE, echo=FALSE}
+data2013<-subset(my_datana, year == 2013)
+str(data2013)
+data2013<-data2013[ , c (1,2,3,4,5,6,7,8,9,10,11,12)]
+summary(data2013)
+str(data2013)
+data2013<-data2013[ , c (1,2,3,4,5,6,7,8,9,10,12)]
+data2013_S<-data2013[,c(6,7,8,9,10,11)]
+data_2013_S<-scale(data2013_S)
+str(data_2013_S)
+```
+
+Correlations between the variables
+```{r  pairsplot, eval = TRUE, fig.cap= "Fig.2. Pairs Plot for the variables in year 2013"}
+str(data_2013_S)
+pairs(data_2013_S) #scaled data
+```
+
+```{r fig.cap = "Fig.3. Corrplot of the variables in year 2013"}
+cor(data_2013_S)
+corrplot(cor(data_2013_S))
+```
+
+Since PM2.5 had very few high correlations, I decided to take only some of the mildly correlated variables as predictor for the rest of the experiments to predict PM2.5 concentration.(DEWP, Iws, HUMI, TEMP, PRES).
+
+
+Boxplots were created to look at the data distribution of all the variables and PM2.5.
+
+```{r fig 4,  fig.cap = "Fig.4. Boxplots of the variables in 2013"}
+str(data2013)
+par(mfrow=c(3,2))
+boxplot(data2013$PM2.5, xlab="PM2.5", ylab="frequency")
+boxplot(data2013$TEMP, xlab="Temperature", ylab="frequency")
+boxplot(data2013$HUMI, xlab="Humidity", ylab="frequency")
+boxplot(data2013$PRES, xlab="Pressure", ylab="frequency")
+boxplot(data2013$Iws, xlab="Iws", ylab="frequency")
+```
+PM2.5 values and Iws were skewed so were log transformed make it more normally distributed.
+
+```{r fig 5,  eval=TRUE, fig.cap = "Fig.5. Box plots for log transformed PM2.5 and Iws"}
+par(mfrow=c(1,2))
+boxplot(log(data2013$PM2.5), xlab="log PM2.5", ylab="frequency") 
+boxplot(log(data2013$Iws), xlab="logIws", ylab="frequency")
+```
+
+```{r  fig 6, eval=TRUE, fig.cap = "Fig.6. Boxplot of logPM2.5 with year, month, day and season"}
+par(mfrow=c(2,2))
+boxplot(log(PM2.5)~ year, data = data2013) 
+ boxplot(log(PM2.5) ~ month, data = data2013) 
+ boxplot(log(PM2.5) ~ day, data = data2013) 
+ boxplot(log(PM2.5) ~ season, data = data2013)
+```
+
+
+```{r fig 7, eval=TRUE, fig.cap = "Fig.7. Boxplot of log Iws for year, month, day and season"}
+ par(mfrow=c(2,2))
+ boxplot(log(Iws) ~ year, data = data2013) 
+ boxplot(log(Iws)  ~ month, data = data2013) 
+ boxplot(log(Iws)  ~ day, data = data2013) 
+ boxplot(log(Iws) ~ season, data = data2013)
+```
+
+```{r fig 8, eval=TRUE, fig.cap = "Fig.8. Boxplot of TEMP for year, month, day and season"}
+par(mfrow=c(2,2))
+ boxplot(TEMP ~ year, data = data2013) 
+ boxplot(TEMP  ~ month, data = data2013) 
+ boxplot(TEMP  ~ day, data = data2013) 
+ boxplot(TEMP ~ season, data = data2013)
+```
+
+```{r fig 9, eval=TRUE, fig.cap = "Fig.9. Boxplot for HUMI for year, month, season, day"}
+par(mfrow=c(2,2))
+ boxplot(HUMI ~ year, data = data2013) 
+ boxplot(HUMI  ~ month, data = data2013) 
+ boxplot(HUMI  ~ day, data = data2013) 
+ boxplot(HUMI ~ season, data = data2013)
+```
+
+
+```{r fig 10, eval=TRUE, fig.cap = "Fig.10. Boxplot for DEWP for year, month, day, season"}
+par(mfrow=c(2,2))
+boxplot(DEWP ~ year, data = data2013) 
+ boxplot(DEWP ~ month, data = data2013) 
+ boxplot(DEWP ~ day, data = data2013) 
+ boxplot(DEWP ~ season, data = data2013)
+```
+
+```{r echo=FALSE, eval=FALSE}
+str(data2013)
+data2013a<-data2013[,c(1,2,3,4,5,6,7,8,9,10,11)]
+str(data2013a)
+```
+
+
+Added a column with log transformed values for PM2.5 and saved in a new dataframe (data2013a) with fewer variables 
+```{r echo=FALSE, eval=FALSE}
+data2013a<-mutate(data2013, logPM2.5 = log(PM2.5))
+str(data2013a)
+data2013a<-mutate(data2013a, logIws = log(Iws))
+head(data2013a)
+```
+
+
+Seasonal influence on air pollution is widely know (Zhai et al., 2018). Although I wanted to look at variation during the time series, I decided not to take the time series into account due to complications and do further analysis based on hourly PM2.5 readings (logPM2.5). The following graphs show the correlation of PM2.5 with other variables. Although the correlations does not look significant, there are some variables which have weak correlations with PM2.5 readings. In the literature, there have been many studies to look at the effect of various meterological factors on PM2.5 readings in various conditions (Pu et al., 2011; Chen et al., 2014; Lou et al., 2017; Li et al., 2017).  
+
+
+```{r eval=FALSE}
+library(ggplot2)
+install.packages("gridExtra")
+library(gridExtra)
+```
+
+```{r echo=FALSE, eval=TRUE, fig.cap = "Fig. 11. Scatterplot to see the correlations between the hourly PM2.5 readings and other variables"}
+str(data2013a)
+par(mfrow=c(3,2))
+f1<-ggplot(data = data2013a, aes(x=DEWP, y=log(PM2.5), colour = hour)) + geom_point() + geom_smooth(method="auto", formula = y~x, colour = "red", size=2)
+
+f2<-ggplot(data = data2013a, aes(x=TEMP, y=log(PM2.5), colour = hour)) + geom_point() + geom_smooth(method="auto", formula = y~x, colour = "red", size=2)
+
+f3<-ggplot(data = data2013a, aes(x=log(Iws), y=log(PM2.5), colour = hour)) + geom_point() + geom_smooth(method="auto", formula = y~x, colour = "red", size=2)
+
+f4<-ggplot(data = data2013a, aes(x=HUMI, y=log(PM2.5), colour = hour)) + geom_point() + geom_smooth(method="auto", formula = y~x, colour = "red", size=2)
+
+f5<-ggplot(data = data2013a, aes(x=PRES, y=log(PM2.5), colour = hour)) + geom_point() + geom_smooth(method="auto", formula = y~x, colour = "red", size=2)
+
+grid.arrange(f1,f2,f3,f4,f5)
+```
+
+
+
+Categorical classes for the values on PM2.5 as AQ_Level (air quality)(clear, polluted, highly polluted) was added for classification purpose. Dataframe data2013b contains 3 leveks of pollution where, PM2.5 readings less than 35 are categorised as clear, PM2.5 above 35 are polluted and PM2.5 above 100 are highly polluted. Some literatures have used this approach to classify pollution levels according to WHO standards and have used qir quality index (AQI) as the indicator of pollution levels (Taieb and Brahim, 2013). In this case, any readings below 35 is clear, above 35 is polluted and anything above 100 is highly polluted.
+
+```{r eval=FALSE}
+data2013a
+data2013b<-data2013a[,c(1,2,3,4,5,6,7,8,9,10,11,12,13)]
+data2013b <- mutate (data2013b,
+             AQ_Level = case_when(PM2.5 > 100 ~ "highly polluted",
+             PM2.5 > 35 ~ "polluted",
+            TRUE ~ "clear"))
+```
+
+```{r eval=FALSE}
+data2013b
+```
+
+```{r fig 12, eval=TRUE, fig.cap = "Fig.12. Barplot of Class distribution" }
+barplot (table(data2013b$AQ_Level), main = "Class Distribution")
+```
+
+The class distribution was not too unbalanced.
+
+```{r eval=FALSE}
+str(data2013b)
+```
+
+```{r eval = FALSE}
+# added year, month and hour into datetime as timestamp # was going to use this for something but ran out of time
+library(lubridate)
+data2013b$timestamp<- with(data2013b, ymd_h(paste(year, month, day, hour, sep = '.')))
+str(data2013b)
+```
+
+
+#ALso created a separate dataframe for only two classes for Logistic regression
+For this I created air quality index as PM2.5readings  less than and equal to 70 as "clear" and anything above that as "polluted"
+```{r eval=TRUE}
+head(data2013b)
+data2013c<-data2013b[,c(1,2,3,4,5,6,7,8,9,10,11,12,13,14)]
+str(data2013c)
+
+data2013c <- mutate (data2013c,
+             AQ_Level_2 = case_when(PM2.5 > 70~ "high",
+            TRUE ~ "low"))
+```
+
+Chnaged to binomial value 0 and 1.
+```{r}
+data2013c$AQ_Level_2<-ifelse(data2013c$PM2.5<=70, 0,1)
+```
+
+```{r fig 13, eval=TRUE, fig.cap = "Fig.13. Barplot for class distribution"}
+barplot (table(data2013c$AQ_Level_2), main = "Class Distribution")
+```
+
+The barplots showed equal distribution of classes in the two classes.
+
+Changed the AQ levels to factor. This will be our class or target for further analyses.
+```{r eval=FALSE}
+data2013b$AQ_Level<-as.factor(data2013b$AQ_Level)
+str(data2013b)
+```
+
+```{r eval=FALSE}
+data2013c$AQ_Level_2<-as.factor(data2013c$AQ_Level_2)
+str(data2013c)
+```
+
+#PCA to look at 2013b dataset
+```{r eval=FALSE}
+library(ggplot2)
+library(cowplot)
+library(dplyr)
+library(grid)
+head(data2013c)
+str(data2013b)
+
+data_PCA<-data2013b[,c(7,8,9,10,13,14)]
+str(data_PCA)
+data_PCA_S<-scale(data_PCA[,1:5])
+head(data_PCA_S)
+data_AQI<-data_PCA[,6]
+head(data_AQI)
+pca_data<-prcomp(data_PCA_S)
+head(pca_data$x)
+pca_data <- data.frame(pca_data$x, AQ_Level=data_AQI)
+head(pca_data)
+
+
+g1<-ggplot(pca_data, aes(x=PC4, y=PC5, color=AQ_Level)) + geom_point()
+g2<-ggplot(pca_data, aes(x=PC2, y=PC3, color=AQ_Level)) + geom_point()
+g3<-ggplot(pca_data, aes(x=PC5, y=PC2, color=AQ_Level)) + geom_point()
+library(ggplot2)
+install.packages("gridExtra")
+library(gridExtra)
+```
+
+
+```{r fig 14, eval=TRUE, fig.cap = "Fig. 14. PCA plots for scaled variables"}
+grid.arrange(g1,g2,g3)
+```
+PCA was not conclusive as theere was no separation int he plots according to the AQ_Levels (clear, highly polluted and polluted). There is no clear separation of the classes.HUMI and PRES seem to be contributing to PC5 but other variables seems to have very little effect. 
+
+After the values were centered.
+```{r}
+pca_data_2<-prcomp(data_PCA_S, center = TRUE)
+print(pca_data_2)
+```
+
+```{r  pcaplot, eval=TRUE, fig.cap = "Fig. 15. PCA variance plot"}
+plot(pca_data_2, type='l')
+```
+
+```{r}
+summary(pca_data_2)
+
+```
+
+
+
+
+## Supervised Learning Experiments
+
+# Logistic Regression: Here I want to use the dataframe data2013c which has two classes (0 and 1)
+```{r}
+str(data2013c)
+library(lubridate)
+data2013c$timestamp<- with(data2013c, ymd_h(paste(year, month, day, hour, sep = '.')))
+str(data2013c)
+head(data2013c)
+```
+
+Our class in balanced so no need for balancing. Will do data partition to create the training and testing sets. Data partition was done with 70% for training and 30% for testing.
+```{r}
+#data partition with 80% data for training and 20% for testing
+head(data2013c)
+data_glm<-data2013c[,c(7,8,9,10,13)]
+data_L<-data2013c[,c(15)]
+data_glm_S<-scale(data_glm)
+head(data_glm_S)
+data_glm_N<-data.frame(data_glm_S,AQ_Level_2=data_L)
+head(data_glm_N)
+```
+
+```{r}
+head(data_glm_N)
+library(caret)
+set.seed(100)
+train_index<-createDataPartition(data_glm_N$AQ_Level_2, p=0.8, list =F)
+train_glm<- data_glm_N[train_index,]
+test_glm<-data_glm_N[-train_index,]
+table(train_glm$AQ_Level_2)
+table(test_glm$AQ_Level_2)
+```
+
+
+#logistic model
+```{r}
+train_glm
+logitmod<-glm(AQ_Level_2 ~ DEWP + HUMI + PRES + TEMP + logIws, family = "binomial", data = train_glm)
+summary(logitmod)
+```
+
+This shows that DEWP, TEMP and logIws are significant predictor. DEWP has positive effect while TEMP and logIws have negative effects. 
+
+#predict dataset
+```{r}
+test_glm
+pred_glm<-predict (logitmod, newdata = test_glm, type = "response")
+
+#pred gives the probability of observation
+pred_glm[1:10]
+
+y_pred_num<-ifelse(pred_glm >0.5, 1, 0)
+y_pred<-factor(y_pred_num, levels=c(0,1))
+y_acc<-test_glm$AQ_Level_2
+
+mean(y_pred == y_acc) #accuray of 69.5%
+```
+
+Accuracy of 65.9% was obtained from this model.
+
+
+```{r eval = TRUE}
+#y_pred
+#caret::confusionMatrix(y_pred, y_acc, positive = "0", mode = "everything")
+```
+This method gave the prediction accuracy of 69.5%
+
+
+```{r}
+
+librar(dplyr)
+library(MASS)
+```
+```{r eval=TRUE}
+set.seed(100)
+model.LDA = lda(AQ_Level ~ ., data = train_LDA)
+model.LDA
+#predictions
+predict_LDA<-predict(model.LDA, newdata = test_LDA)
+table(predict_LDA$class, test_LDA$AQ_Level)
+
+```
+
+
+I used createdataPartition in caret to split the dataset into 80:20. 80% of the dataset will be kept for training and 20% for validation. 
+
+```{r}
+library(caret)
+library(lattice)
+```
+
+
+```{r}
+str(data2013c)
+data_LDA<-data2013c[,c(7,8,9,10,13,14)]
+data_LDA$AQ_Level<-as.factor(data_LDA$AQ_Level)
+    
+str(data_LDA)
+data_LDA$timestamp<-NULL
+
+train_index<-createDataPartition(data_LDA$AQ_Level, p=0.8, list =F)
+train_data<- data_LDA[train_index,]
+
+test_data<-data_LDA[-train_index,]
+
+control<-trainControl(method="cv", number=5)
+metric <- "Accuracy"
+```
+
+
+Build four models for lda, qda, svmRadial and random forest
+```{r}
+# LDA
+head(data_LDA)
+set.seed(100)
+#QDA
+fit.qda<-train(AQ_Level ~., data = train_data, method = "qda", metric=metric, trControl=control)
+set.seed(100)
+fit.lda<-train(AQ_Level ~., data = train_data, method = "lda", metric=metric, trControl=control)
+# svmRadial
+set.seed(101)
+fit.svm<-train(AQ_Level ~., data = train_data, method = "svmRadial", metric=metric, trControl=control)
+#random forest
+set.seed(102)
+fit.rf<-train(AQ_Level ~., data = train_data, metric=metric, method = "rf", trControl=control)
+```
+
+```{r}
+#summarise the results
+results<-resamples(list(qda= fit.qda, lda=fit.lda, svm=fit.svm, rf=fit.rf))
+summary(results)
+```
+Accuracy was highest in rf. 
+
+```{r fig 16, echo=FALSE,fig.cap = "Fig.16. Accuracies and kappa of all the models used"}
+#compare models
+dotplot(results)
+
+print(fit.rf)
+```
+
+```{r eval=FALSE}
+str(data_LDA)
+lda_AQ<-data_LDA[,6]
+data_LDA_A<-data_LDA[,c(1,2,3,4,5)]
+data_LDA_A
+data_S<-scale(data_LDA_A)
+data_S
+lda_AQ
+lda_data<-data.frame(data_S, AQ_Level=lda_AQ)
+```
+
+
+
+```{r plots, echo=FALSE, eval=TRUE, fig.cap = "Fig.17. boxplots of the scaled variables" }
+par(mfrow=c(2,2))
+b1<-boxplot(lda_data$DEWP ~ lda_data$AQ_Level,xlab= "AQ_Level", ylab="DEWP")
+b2<-boxplot(lda_data$HUMI ~ lda_data$AQ_Level,xlab= "AQ_Level", ylab="HUMI")
+b3<-boxplot(lda_data$logIws ~ lda_data$AQ_Level,xlab= "AQ_Level", ylab="logIws")
+b4<-boxplot(lda_data$PRES ~ lda_data$AQ_Level,xlab= "AQ_Level", ylab="PRES")
+```
+
+#models with scaled data with five fold cv on scaled data
+For this I used caret to do the partition at 80:20 and CV with 5 folds. When tried with 10 fold cv, the R studio crashed. 
+```{r}
+library(caret)
+library(lattice)
+head(lda_data)
+train_index<-createDataPartition(lda_data$AQ_Level, p=0.8, list =F)
+train_data<- lda_data[train_index,]
+
+test_data<-lda_data[-train_index,]
+
+control<-trainControl(method="cv", number=5)
+metric <- "Accuracy"
+```
+Build models for scaled data with cv=5
+```{r}
+#QDA
+set.seed(100)
+fit.qda<-train(AQ_Level ~., data = train_data, method = "qda", metric=metric, trControl=control)
+# LDA
+set.seed(100)
+fit.lda<-train(AQ_Level ~., data = train_data, method = "lda", metric=metric, trControl=control)
+# svmRadial
+set.seed(101)
+fit.svm<-train(AQ_Level ~., data = train_data, method = "svmRadial", metric=metric, trControl=control)
+#random forest
+set.seed(102)
+fit.rf<-train(AQ_Level ~., data = train_data, metric=metric, method = "rf", trControl=control)
+```
+
+```{r}
+#summarise the results
+results<-resamples(list(qda= fit.qda,lda=fit.lda, svm=fit.svm, rf=fit.rf))
+summary(results)
+```
+```{r fig 18, echo=FALSE, eval=TRUE, fig.cap = "Fig.18. Accuracies and kappa of all the models used"}
+#compare models
+dotplot(results)
+
+print(fit.rf)
+```
+
+
+Random forest was used to test the accuracy on testing set. Even with changing some parameters the accuracy did not improve much.
+```{r}
+library(randomForest)
+library(dbplyr)
+library(ggplot2)
+library(caret)
+library(lattice)
+head(lda_data)
+```
+
+```{r}
+set.seed(100)
+train_index<-createDataPartition(lda_data$AQ_Level, p=0.8, list =F)
+train_data<- lda_data[train_index,]
+
+test_data<-lda_data[-train_index,]
+
+
+data_rf <- randomForest(AQ_Level~.,data=train_data,ntree=100,proximity=TRUE)
+print(data_rf)
+
+importance(data_rf)
+
+varImpPlot(data_rf)
+
+#predict
+rf_pred<-predict(data_rf,newdata=test_data)
+  table(rf_pred, test_data$AQ_Level)
+
+confusionMatrix(rf_pred, test_data$AQ_Level)
+```
+This gave an aacuracy of around 70%.
+
+
+```{r}
+
+plot(margin(data_rf),test_data$AQ_Level)
+
+print(sum(rf_pred==test_data$AQ_Level)) # 1198 were correctly classified
+
+print(length(test_data$AQ_Level))# 1734
+#out of 1734, 1198 were correctly classified by rf
+
+print(sum(rf_pred==test_data$AQ_Level)/length(test_data$AQ_Level)) # 70% accuracy
+
+```
+
+
+#Test the model with just three variables(DEWP, TEMP, logIws) as they were the only one that had significant effect on Air quality in the other datasets as shown by glm. Here I will take the same dataset (lda_data) which is the scaled dataset.
+
+```{r}
+head(lda_data)
+#with less variables
+lda_data_less<-lda_data[,c(1,4,5,6)]
+ str(lda_data_less)
+
+#create partition
+
+train_index_less<-createDataPartition(lda_data_less$AQ_Level, p=0.8, list =F)
+train_less<- lda_data_less[train_index_less,]
+
+test_less<-lda_data_less[-train_index_less,]
+
+control<-trainControl(method="cv", number=5)
+metric <- "Accuracy"
+```
+
+Build models for dataset with less variables
+```{r}
+#QDA
+set.seed(100)
+fit.qda<-train(AQ_Level ~., data = train_less, method = "qda", metric=metric, trControl=control)
+# LDA
+set.seed(100)
+fit.lda<-train(AQ_Level ~., data = train_less, method = "lda", metric=metric, trControl=control)
+# svmRadial
+set.seed(101)
+fit.svm<-train(AQ_Level ~., data = train_less, method = "svmRadial", metric=metric, trControl=control)
+#random forest
+set.seed(102)
+fit.rf<-train(AQ_Level ~., data = train_less, metric=metric, method = "rf", trControl=control)
+
+#summarise the results
+results<-resamples(list(qda_less= fit.qda,lda_less=fit.lda, svm_less=fit.svm, rf_less=fit.rf))
+summary(results)
+```
+
+
+
+```{r fig 19, echo=FALSE, eval=TRUE, fig.cap = "Fig.19. Accuracies and kappa of all the models used with only three variables"}
+#compare models
+dotplot(results)
+
+print(results)
+```
+
+
+Random forest is still the one with highest accuracy and so used it to test the model.
+
+```{r}
+library(randomForest)
+library(dbplyr)
+library(ggplot2)
+data_rf_less <- randomForest(AQ_Level~.,data=test_less,ntree=100,proximity=TRUE)
+print(data_rf_less)
+importance(data_rf_less)
+varImpPlot(data_rf_less)
+#predict
+rf_pred<-predict(data_rf_less,newdata=test_less)
+  table(rf_pred, test_less$AQ_Level)
+
+confusionMatrix(rf_pred, test_less$AQ_Level)
+```
+
+# Results and discussions:
+PM2.5, the particulate matter which is the main component of air pollution is the target in this study. Meterological factors such as pressure(PRES), dew point (DEWP), cumulated wind speed (Iws), temperature(TEMP) and humidity(HUMI) were looked at. PM2.5 did not correlate highly with any of the predictors. This dataset has time series but for the purpose of this report, time series was not taken into account. Correlations of PM2.5 with other variables showed very mild correlation with some of the variables. The readings were hourly reading for the whole year. Taking the moving average of the reading would have given a better solution. However, I did not have time to explore this.From the data exploration, lot of unused variables were discarded. Combined wind speed was changed to numeric by one-hot-encoding but this had no effct and made it more complicated. So I decided not to include it in the analysis. Use of air quality index allowed to use classification methods for supervised learning. 
+
+
+Although the accuracies of all the models are very low,  result shows that rf (randomForest) is the most important model for this data with the accuracy of 70%. The model can be improved by tuning the parameters in each model. Even when the variables were reduced, the results were the same. 
+
+Finally I tried running the model with less variables only DEWP, TEMP and logIws. All four models were run and again random forest had the highest accuracy. Random forest was used to validate the model on testing data. Surprisingly, the confusion matrix showed an accuracy of 93% and very high sensitivity and specificity. However, I ran out of time to check them properly and look at improving other models.
+
+
+# REFERENCES:
+Cheng, Yuan & He, Ke-Bin & Du, Zhen-Yu & Zheng, Mei & Duan, Feng-Kui & Ma, Yong-Liang. (2014). Humidity plays an important role in the PM2.5 pollution in Beijing. Environmental pollution (Barking, Essex : 1987). 197C. 68-75. 10.1016/j.envpol.2014.11.028. 
+
+Hamra, GB; Guha, N; Cohen, A; Laden, F; Raaschou-Nielsen, O; Samet, JM; Vineis, P; Forastiere, F; Saldiva, P; Yorifuji, T;  and Loomis, D(2014). Outdoor particulate matter exposure and lung cancer: a systematic review and meta-analysis. Environmental health perspectives, 122(9), 906–911. https://doi.org/10.1289/ehp/1408092
+
+Liang, X;  Li, S; Zhang, S; Huang, H and Chen, SX (2016), PM2.5 data reliability, consistency, and air quality assessment in five Chinese cities, J. Geophys. Res. Atmos., 121, 
+
+Li, X & Feng, Y & Liang, H. (2017). The Impact of Meteorological Factors on PM2.5 Variations in Hong Kong. IOP Conference Series: Earth and Environmental Science. 78. 012003. 10.1088/1755-1315/78/1/012003. 
+
+Lou, C., Liu, H., Li, Y. et al. Relationships of relative humidity with PM2.5 and PM10 in the Yangtze River Delta, China. Environ Monit Assess 189, 582 (2017). https://doi.org/10.1007/s10661-017-6281-z
+
+Pu, W; Zhao, X; Zhang,X;  Ma,Z (2011) . Effect of Meteorological Factors on PM2.5 during July to September of Beijing,
+Procedia Earth and Planetary Science, Volume 2,Pages 272-277,ISSN 1878-5220,
+
+Taieb, D and Brahim, A (2013). methodology for developing an air quality index(AQI) for Tunisia. International Journal of Renewable Energy and Technology:4 86-106.
+
+Zhai, Binxu & Chen, Jianguo & Yin, Wenwen & Zhongliang, Huang. (2018). Relevance Analysis on the Variety Characteristics of PM2.5 Concentrations in Beijing, China. Sustainability. 10. 3228. 10.3390/su10093228. 
+```{r}
+rmarkdown::render("1903445_CourseworkV1.rmd")
+```
