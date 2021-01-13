@@ -1,0 +1,826 @@
+---
+title: "Air quality in Beijing city"
+author: "Roshi Shrestha (1903445)"
+date: "05/04/2020"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Introduction:
+
+
+
+
+
+Exploratory Data Analysis:
+Introduce the section here: Look at the dataset. Provide dataset info.
+
+## R Markdown
+```{r}
+getwd()
+data<- read.csv ("Beijing2015.csv")
+summary(data)
+str(data)
+head(data)
+tail(data)
+```
+Data cleaning and preprocessing:
+
+Get rid of missing values. this got rid year 2010-2012 which had no data or lots of missing data. I will use the filter function
+```{r message = FALSE, warning = FALSE}
+library(tidyverse)
+library(tidyr)
+filt_data<-filter(data, year>2012)
+```
+
+Look at the dataset
+```{r}
+dim(filt_data)
+str(filt_data)
+head(filt_data)
+summary(filt_data)
+class(filt_data)
+```
+Got rid of useless columns: in this case all other PM2.5 readings apart from US_Post was removed
+````{r}
+my_data <- filt_data [ , c (2,3,4,5,6,10,11,12,13,14,15,16,17,18)]
+str(my_data)
+summary(my_data)
+```
+
+
+
+
+
+I want to change the column name PM_US.Post to PM2.5
+```{r message = FALSE, warning = FALSE}
+library(data.table)
+setnames(my_data, "PM_US.Post", "PM2.5")
+```
+
+Now look for missing data
+```{r}
+summary(my_data)
+#there are still some missing values in the dataset.
+list_na <- colnames(my_data)[ apply(my_data, 2, anyNA) ]
+list_na # show the list of columns that contain NAs
+```
+Remove missing values. I decided to get rid of rows containing missing values.
+```{r}
+my_datana <- na.omit (my_data)
+colSums(is.na(my_datana)) # no NAs left
+str(my_datana)
+# here I want to change columns 1 to 7 to numeric from int
+my_datana[1:7]<- lapply(my_datana[1:7], as.numeric)
+str(my_datana) # all are changed into numeric
+```
+
+Change year, month, day, hour as factors
+
+Now look at the dataframe again
+```{r}
+summary(my_datana)
+head(my_datana)
+my_datana<-subset(my_datana, select = c(1,2,3,4,5,7,8,9,10,11,12,13,14,6))
+```
+look at variables
+```{r}
+#histogram of variables
+pairs(my_datana)
+pairs(my_datana[, c(4,6,7,8,9,14)])
+pairs(my_datana[, c(7,8,9,14)])
+```
+look at correlations between the variables
+```{r}
+library(ggplot2)
+cor(my_datana[, c(5,7, 6,8,9,14)])
+library(corrplot)
+corrplot(cor(my_datana[, c(5,7, 6,8,9,14)]))
+```
+
+```{r}
+lm2 <- lm (PM2.5 ~ year + month + season, data = my_datana)
+summary.aov(lm2)
+plot(lm2)
+```
+Only year 2013
+
+```{r}
+str(data2013)
+data2013<-subset(my_datana, year == 2013)
+data2013<-data2013[ , c (1,2,3,4,5,6,7,8,9,10,11,14)]
+summary(data2013)
+str(data2013)
+```
+```{r}
+#one-hot-encode the cbwd values
+cbwd_num <- dummyVars(" ~ cbwd", data = data2013)
+cbwd_num <- data.frame(predict(cbwd_num, newdata =  data2013))
+
+#join this daraframe with the old data
+
+data2013a <- cbind(data2013, cbwd_num)
+data2013a$cbwd <- NULL
+```
+```{r}
+pairs(data2013a)
+cor(data2013a)
+corrplot(cor(data2013a))
+```
+
+I want to change the column name PM_US.Post to PM2.5
+```{r message = FALSE, warning = FALSE}
+library(data.table)
+setnames(data2013a, "PM_US.Post", "PM2.5")
+```
+Outlier detection
+boxplots of the variables
+Doing the log transformation on PM2.5 values improved the distribution. 
+```{r}
+
+par(mfrow=c(2,2))
+boxplot(data2013a$PM2.5, xlab="PM2.5", ylab="frequency")
+boxplot(data2013a$TEMP, xlab="Temperature", ylab="frequency")
+boxplot(data2013a$HUMI, xlab="Humidity", ylab="frequency")
+boxplot(data2013a$PRES, xlab="Pressure", ylab="frequency")
+boxplot(log(data2013a$PM2.5), xlab="log PM2.5", ylab="frequency") # chaging to log improved the distribution
+boxplot(log(data2013a$Iws), xlab="Iws", ylab="frequency")
+```
+```{r}
+#Added a column with log transformed values for PM2.5
+data2013a<-mutate(data2013a, logPM2.5 = log(PM2.5))
+str(data2013a)
+data2013a<-mutate(data2013a, logIws = log(Iws))
+```
+
+```{r}
+par(mfrow=c(2,2))
+boxplot(logPM2.5 ~ year, data = data2013a) 
+ boxplot(logPM2.5 ~ month, data = data2013a) 
+ boxplot(logPM2.5 ~ day, data = data2013a) 
+ boxplot(logPM2.5 ~ season, data = data2013a)
+```
+
+```{r}
+ par(mfrow=c(2,2))
+ boxplot(logIws ~ year, data = data2013a) 
+ boxplot(logIws  ~ month, data = data2013a) 
+ boxplot(logIws  ~ day, data = data2013a) 
+ boxplot(logIws ~ season, data = data2013a)
+```
+```{r}
+par(mfrow=c(2,2))
+ boxplot(TEMP ~ year, data = data2013a) 
+ boxplot(TEMP  ~ month, data = data2013a) 
+ boxplot(TEMP  ~ day, data = data2013a) 
+ boxplot(TEMP ~ season, data = data2013a)
+```
+```{r}
+par(mfrow=c(2,2))
+ boxplot(HUMI ~ year, data = data2013a) 
+ boxplot(HUMI  ~ month, data = data2013a) 
+ boxplot(HUMI  ~ day, data = data2013a) 
+ boxplot(HUMI ~ season, data = data2013a)
+```
+```{r}
+par(mfrow=c(2,2))
+boxplot(DEWP ~ year, data = data2013a) 
+ boxplot(DEWP ~ month, data = data2013a) 
+ boxplot(DEWP ~ day, data = data2013a) 
+ boxplot(DEWP ~ season, data = data2013a)
+```
+correlations between some individual variables
+
+```{r}
+library(ggplot2)
+#between DEWP, TEMP, HUMI, Iws
+par(mfrow=c(2,2))
+ggplot(data = data2013a, aes(x=DEWP, y=PM2.5, colour = hour)) + geom_point() + geom_smooth(method="auto", formula = y~x, colour = "red", size=2)
+
+ggplot(data = data2013a, aes(x=DEWP, y=logPM2.5, colour = hour)) + geom_point() + geom_smooth(method="auto", formula = y~x, colour = "red", size=2)
+
+ggplot(data = data2013a, aes(x=TEMP, y=PM2.5, colour = hour)) + geom_point() + geom_smooth(method="auto", formula = y~x, colour = "red", size=2)
+ggplot(data = data2013a, aes(x=TEMP, y=logPM2.5, colour = hour)) + geom_point() + geom_smooth(method="auto", formula = y~x, colour = "red", size=2)
+ggplot(data = data2013a, aes(x=Iws, y=logPM2.5, colour = hour)) + geom_point() + geom_smooth(method="auto", formula = y~x, colour = "red", size=2)
+
+ggplot(data = data2013a, aes(x=logIws, y=logPM2.5, colour = hour)) + geom_point() + geom_smooth(method="auto", formula = y~x, colour = "red", size=2)
+
+ggplot(data = data2013a, aes(x=HUMI, y=PM2.5, colour = hour)) + geom_point() + geom_smooth(method="auto", formula = y~x, colour = "red", size=2)
+
+ggplot(data = data2013a, aes(x=HUMI, y=logPM2.5, colour = hour)) + geom_point() + geom_smooth(method="auto", formula = y~x, colour = "red", size=2)
+
+ggplot(data = data2013a, aes(x=PRES, y=logPM2.5, colour = hour)) + geom_point() + geom_smooth(method="auto", formula = y~x, colour = "red", size=2)
+```
+
+```{r}
+
+#added the date column
+data2013a$Date <- as.Date( paste( data2013a$year, data2013a$month , data2013a$day , sep = "-" , format = "m/%d/%y" ))
+str(data2013)
+colnames(data2013a)
+```
+
+```{r}
+#year, month and hour into datetime
+library(lubridate)
+data2013a$timestamp<- with(data2013a, ymd_h(paste(year, month, day, hour, sep = '.')))
+str(data2013a)
+```
+
+Want to add categorical classes to the PM2.5 values as AQ_Level (air quality)(clear, polluted, highly polluted)
+
+```{r}
+data2013a <- mutate (data2013a,
+             AQ_Level = case_when(PM2.5 > 100 ~ "highly polluted",
+             PM2.5 > 35 ~ "polluted",
+            TRUE ~ "clear"))
+
+barplot (table(data2013a$AQ_Level), main = "Class Distribution")
+```
+
+# only clear and polluted
+```{r}
+data2013a <- mutate (data2013a,
+             AQ_Level_2 = case_when(PM2.5 > 70~ "high",
+            TRUE ~ "low"))
+
+data2013a$AQ_Level_2<-ifelse(data2013a$PM2.5<=70, 0,1)
+
+barplot (table(data2013a$AQ_Level_2), main = "Class Distribution")
+
+
+str(data2013a)
+data2013a_pca = data2013a[,c(8,9,10,11,13,14,15,16,17,18,19,21)]
+
+str(data2013a_pca)
+
+pca_comp<-prcomp(data2013a_pca, scale. =T)
+names(pca_comp)
+
+#center scale
+pca_comp$center
+
+pca_comp$scale
+
+pca_comp$rotation
+
+#first 4 components of first 5 rows
+pca_comp$rotation[1:5,1:4]
+
+#plot
+biplot(pca_comp, scale=0)
+
+
+#stdev
+stdev_pca<-pca_comp$sdev
+var_pca<-stdev_pca^2
+
+#proportion of variance
+prop_var<-var_pca/sum(var_pca)
+
+#plot
+plot(prop_var, xlab = "Principal Component",
+     ylab="Proportion of Variance Explained",
+     type ="b")
+```
+
+
+
+```{r}
+str(data2013a_pca)
+apply(data2013a_pca, 2, mean)
+apply(data2013a_pca, 2, var)
+pca_out<-prcomp(data2013a_pca, scale=TRUE)
+summary(pca_out)
+```
+
+
+```{r}
+str(data2013a)
+data2013a$timestamp<-NULL
+colnames(data2013a)[1] <- "timestamp"
+```
+
+
+
+```{r}
+str(data2013a)
+data2013b= data2013a[,c(8,9,10,11,12,13,18,19)]
+str(data2013b)
+
+```
+
+
+
+```{r}
+
+str(data2013LDA)
+data2013LDA = data2013a[, c(1, 8, 9, 10,11,12,13,14,15,16,17,18,19,20)]
+
+data2013LDA = data2013LDA[, c(1,8,9,10,11,14,15)]
+
+data2013LDA$AQ_Level<-as.factor(data2013LDA$AQ_Level)
+str(data2013LDA)
+
+data2013LDA_8 = data2013LDA[,c(1,2,3,4,5,10,11,12)]
+str(data2013LDA_8)
+```
+
+
+```{r}
+library(caret)
+library(car)
+#scatterplot matrix
+scatterplotMatrix(data2013LDA_8[2:7])
+```
+
+
+
+
+
+
+
+```{r}
+#split the datset (70:30)
+index = sample(1:nrow(data2013LDA), round(nrow(data2013LDA)*0.70),
+               replace =FALSE)
+data2013LDA_train = data2013LDA[index,]
+
+dataLDA_test= data2013LDA[-index, ]
+```
+
+
+```{r}
+library(MASS)
+model.LDA = lda(AQ_Level ~ ., data = data2013LDA)
+model.LDA
+```
+Shows the percentage separation from each discriminant function. 
+```{r}
+predictions<-predict(model.LDA, data2013LDA)
+table(predictions$class, data2013LDA$AQ_Level)
+```
+
+```{r}
+#lda with 8 variables
+index_8 = sample(1:nrow(data2013LDA_8), round(nrow(data2013LDA_8)*0.70),
+               replace =FALSE)
+data2013LDA_8_train = data2013LDA_8[index_8,]
+
+dataLDA__8_test= data2013LDA_8[-index_8, ]
+```
+
+```{r}
+library(MASS)
+model.LDA_8 = lda(AQ_Level ~ ., data = data2013LDA_8)
+model.LDA_8
+
+#predictions
+predictions<-predict(model.LDA_8, data2013LDA_8)
+table(predictions$class, data2013LDA_8$AQ_Level)
+
+```
+```{r}
+#LDA with preprocessed data
+set.seed(123)
+index_8 = sample(1:nrow(data2013LDA_8), round(nrow(data2013LDA_8)*0.70),
+               replace =FALSE)
+data2013LDA_8_train = data2013LDA_8[index_8,]
+
+dataLDA__8_test= data2013LDA_8[-index_8, ]
+
+preproc.param<-data2013LDA_8_train%>%
+  preProcess(method=c("center", "scale"))
+train_transformed<-preproc.param%>%predict(data2013LDA_8_train)
+test_transformed<-preproc.param%>%predict(dataLDA__8_test)
+```
+
+LDA: LDA assumes that different classes have the same variance.
+```{r}
+
+#fit the model
+model1<-lda(AQ_Level~., data = train_transformed)
+model1
+plot(model1)
+
+
+#make predictions on testing set
+
+predictions_mod1<-model1%>%predict(test_transformed)
+names(predictions_mod1)
+
+head(predictions_mod1$class,6)
+
+
+lda.data<-cbind(train_transformed, predict(model1)$x)
+ggplot(lda.data, aes(LD1, LD2)) +
+  geom_point(aes(colour = AQ_Level))
+
+
+#model accuracy
+mean(predictions_mod1$class==test_transformed$AQ_Level) #0.939685
+#model has correctly classfied 94%
+```
+Quadratic discrimant analysis-QDA
+more flexible than LDA as it does not assume the equality of variance. For QDA covariance matrix can be different for each class.
+
+```{r}
+#fit QDA model
+model2<-qda(AQ_Level~.,data=train_transformed)
+model2
+#make predictions
+predictions_mod2<-model2%>%predict(test_transformed)
+
+#accuracy of model
+mean(predictions_mod2$class==test_transformed$AQ_Level) #0.9366116
+
+```
+LDA and QDA both gave similar result. 
+
+
+
+
+RandomForest on train and test data
+```{r}
+index_rand = sample(1:nrow(data2013LDA_8), round(nrow(data2013LDA_8)*0.70),
+               replace =FALSE)
+rand.train = data2013LDA_8[index_rand,]
+
+rand.test= data2013LDA_8[-index_rand, ]
+
+install.packages("randomForest")
+library(randomForest)
+rf.fit<-randomForest(AQ_Level~., data=rand.train)
+rf.fit
+
+```
+```{r}
+train_results<-predict(rf.fit, rand.train)
+table(predictions = train_results, Actual = rand.test$AQ_Level)
+```
+```{r}
+#test on test sets
+test_results<-predict(rf.fit, rand.test)
+table(Predictions = test_results, Actual = rand.test $AQ_Level)
+```
+
+
+Multiple logistic regression
+```{r}
+data2013_glm = data2013a[, c(1,8,9,10,11,12,13,14,15,16,17,18,19,21)]
+
+print(data2013_glm$AQ_Level_2)
+
+#change to binomial
+
+
+
+
+
+glm.all<-glm(AQ_Level_2~DEWP+HUMI+TEMP+PRES+Iws, data = data2013_glm, family = "binomial")
+```
+
+
+
+```{r}
+
+#average every 4h
+library(zoo)
+str(data2013a_4h)
+data2013a_4h<- rollapply(zoo(data2013a$PM2.5,data2013a$date_time), 4, mean)
+
+
+# convert the output of moving average into data.frame
+data2013a_4h <- as.data.frame(data2013a_4h)
+
+# putting the timestamp in rownames into main columns
+data2013a_4h$timestamp <- row.names(data2013a_4h)
+
+
+# Rename the columns
+colnames(data2013a_4h) <- c("AVG_PM2.5_4h","timestamp")
+
+# Get rid of the rownames (optional)
+row.names(data2013a_4h) <- NULL
+
+```
+
+```{r}
+
+data2013a_4h <- mutate (data2013a_4h,
+             AQ_Level_4h = case_when(AVG_PM2.5_4h> 100 ~ "highly polluted",
+             AVG_PM2.5_4h>35 ~ "polluted",
+            TRUE ~ "clear"))
+```
+
+
+```{r}
+#bit skewed so log transform
+data2013a_4h<-mutate(data2013a_4h, logavg_PM2.5 = log(AVG_PM2.5_4h))
+
+#plot log
+par(mfrow=c(2,2))
+hist(data2013a_4h$AVG_PM2.5_4h, xlab="AVG_PM2.5_4h", ylab="frequency")
+
+
+hist(data2013a_4h$logavg_PM2.5, xlab="log_avgPM2.5", ylab="frequency")
+```
+
+```{r}
+str(data2013a)
+str(data2013a_4h)
+
+```
+
+```{r}
+library(plyr)
+#merge data
+data2013a = cbind("id"= timestamp(data2013a), data2013a)
+data2013a_4h = cbind("id"=timestamp(data2013a_4h), data2013a_4h)
+all_data<-merge(data2013a, by = "id", all=T)
+
+```
+
+```{r}
+install.packages("openair")
+library(openair)
+str(data2013)
+wind<-subset(data2013, select= c(1,10))
+windRose(wind)
+```
+histograms
+```{r}
+par(mfrow=c(2,2))
+hist(data2013$PM2.5, xlab="PM2.5", ylab="concentration (ug/m3)")
+hist(data2013$TEMP, xlab="Temperature", ylab="Celsius Degree")
+hist(data2013$HUMI, xlab="Humidity", ylab="%")
+hist(data2013$PRES, xlab="Pressure", ylab="hPa")
+hist(log(data2013$PM2.5), xlab="log PM2.5", ylab="concentration (ug/m3)")
+```
+
+Added a column with log transformed values for PM2.5
+```{r}
+
+```
+
+```{r}
+str(data2013)
+data2013$month <- as.factor(data2013$month)
+data2013$day<-as.factor(data2013$day)
+```
+
+
+
+```{r}
+pairs(data2013)
+cor(data2013)
+corrplot(cor(data2013))
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(data2013$HUMI,data2013$logPM2.5)
+plot(data2013$TEMP,data2013$logPM2.5)
+plot(data2013$PRES,data2013$logPM2.5)
+```
+
+```{r}
+str(data2013)
+
+```
+
+Linear regression
+```{r}
+lm1 <- lm (logPM2.5 ~ month + day + month*day, data = data2013)
+summary(lm1)
+plot(lm1)
+```
+
+```{r}
+
+lm2 <- lm (logPM2.5 ~ season + month + season*month, data = data2013)
+summary(lm2)
+plot(lm2)
+```
+
+
+
+```
+
+
+
+
+
+
+```{r}
+ tapply(data2013$PM2.5, data2013$day, mean)
+tapply(data2013$PM2.5, data2013$month, mean)
+tapply(data2013$PM2.5, data2013$season, mean)
+```
+
+```{r}
+str(data2013)
+ggplot(data = data2013, aes(x=date, y=val)) + geom_line(aes(colour=))
+```
+
+
+SUPERVISED LEARNING:
+```{r}
+library(caret)
+
+```
+
+```{r}
+# Split the data into training (80%) and test set (20%)
+set.seed(123)
+training.samples <- data2013$AQ_Level %>%
+  createDataPartition(p = 0.8, list = FALSE)
+train.data <- data2013[training.samples, ]
+test.data <- data2013[-training.samples, ]
+```
+
+
+```{r}
+library(MASS)
+library(dplyr)
+# Fit the model
+model <- lda(AQ_Level~., data = train.data)
+# Make predictions
+predictions <- model %>% predict(test.data)
+# Model accuracy
+mean(predictions$class==test.data$AQ_Level)
+```
+
+```{r}
+library(MASS)
+model <- lda(AQ_Level~., data = train.data)
+model
+plot(model)
+```
+
+```{r}
+predictions <- model %>% predict(test.data)
+names(predictions)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Look at histogram of frequency of the variables
+```{r}
+hist(my_datana$PM2.5, xlab = "PM2.5")
+plot(my_datana$PM2.5)
+par(mfrow=c(2,2))
+hist(my_datana$TEMP)
+hist(my_datana$PM2.5)
+hist(my_datana$DEWP)
+hist(my_datana$HUMI)
+hist(my_datana$Iws)
+hist(my_datana$precipitation)
+
+```
+
+I would like to add a new column (AQ) for the severity of pollution
+```{r}
+my_datana<-mutate(my_datana,
+                AQ = case_when(PM2.5<=35 ~ "clear",
+                               PM2.5>35 ~ "polluted",
+                               PM2.5>150 ~ "highly polluted"))
+```
+
+Subset only year 2011, 2012, 2013, 2014, 2015
+```{r}
+sub_data2013<-subset(my_datana, year == 2013)
+qplot(TEMP, data = sub_data2013)
+qplot(PM2.5, data = sub_data2013)
+install.packages('moments')
+library(moments)
+skewness(sub_data2013$PM2.5, na.rm = T) # 2.00915 skewed data has negative impact on linear regression
+kurtosis(sub_data2013$PM2.5, na.rm=T) # 9.037199
+
+ggplot(sub_data2013, aes(PM2.5, Iws)) + geom_point()
+
+
+#need transformation. tried sqrt
+sub_data2013$PM2.5.sqrt <- sqrt(sub_data2013$PM2.5)
+ggplot(data=sub_data2013) + geom_histogram(mapping=aes(PM2.5.sqrt))
+skewness(sub_data2013$PM2.5.sqrt, na.rm = T) # 0.7549298 it is now moderately skewed
+ggplot(sub_data2013, aes(PM2.5.sqrt, Iws)) + geom_point()
+
+sub_data2014<-subset(my_datana, year == 2014)
+sub_data2015<-subset(my_datana, year == 2015)
+
+par(mfrow=c(2,2))
+ggplot(sub_data2013, aes(PM2.5, Iws)) + geom_point()
+ggplot(sub_data2013, aes(PM2.5.sqrt, Iws)) + geom_point()
+
+
+#log transformation
+ggplot(data = sub_data2013, aes(x = Iws, y = PM2.5)) +
+  geom_point() +
+  scale_y_log10()
+```
+
+
+```{r}
+sub_data2013<-subset(my_datana, year == 2013)
+qplot(TEMP, data = sub_data2013)
+qplot(PM2.5)
+
+str(sub_data2013)
+sub_data2013$cbwd=NULL
+res=cor(sub_data2013[6:13])
+barplot(table(sub_data2013$AQ), main = "Air quality classification")
+
+
+```
+
+```{r}
+#add a column for date as (year+month+day+hour)
+library(tidyverse)
+library(lubridate)
+with(my_datana, ymd_h(paste(year, month, day, hour, sep= ' ')))
+head (my_datana)
+summary(my_datana)
+```
+Box plots
+```{r}
+
+boxplot(PM2.5~month,
+data=sub_data2013,
+main="Different boxplots for each month in 2013",
+xlab="month",
+ylab="PM2.5",
+col="orange",
+border="brown"
+)
+
+#boxplots with sqrt transformed PM2.5 is much better
+boxplot(PM2.5.sqrt~month,
+data=sub_data2013,
+main="Different boxplots for each month in 2013",
+xlab="month",
+ylab="PM2.5.sqrt",
+col="green",
+border="black"
+)
+
+boxplot(PM2.5~year,
+data=my_datana,
+main="Different boxplots for each year",
+xlab="year",
+ylab="PM2.5",
+col="orange",
+border="brown"
+)
+```
+
+correlations between variables
+```{r}
+library("Hmisc")
+library(lattice)
+library(survival)
+library(Formula)
+str(sub_data2013)
+
+install.packages("PerformanceAnalytics")
+library(PerformanceAnalytics)
+my_data <- sub_data2013[, c(6,7,8,9,10,12,13, 14, 16)]
+chart.Correlation(my_data, histogram=TRUE, pch=19)
+```
+In the above plot:
+
+The distribution of each variable is shown on the diagonal.
+On the bottom of the diagonal : the bivariate scatter plots with a fitted line are displayed
+On the top of the diagonal : the value of the correlation plus the significance level as stars
+Each significance level is associated to a symbol : p-values(0, 0.001, 0.01, 0.05, 0.1, 1) <=> symbols(“***”, “**”, “*”, “.”, " “)
+
+```{r}
+data(airquality)
+str(airquality)
+
+```
+
+
+SUPERVISED LEARNING EXPERIMENTS:
+
